@@ -39,10 +39,6 @@ env/
 *.log
 logs/
 
-# Results
-resultats/
-extractions.csv
-
 # Test cache
 .pytest_cache/
 .coverage
@@ -51,3 +47,5 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+sample_invoices/

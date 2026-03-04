@@ -27,15 +27,18 @@ def test_extract_all_invoices():
         print("Crée le dossier et ajoute des PDF de factures pour tester.")
         return
 
-    files = list(SAMPLE_INVOICES_DIR.glob("*.*"))
+    # Récupérer tous les fichiers et filtrer .DS_Store et .txt
+    all_files = list(SAMPLE_INVOICES_DIR.glob("*.*"))
+    files = [f for f in all_files if f.is_file() and f.name != ".DS_Store" and f.suffix.lower() not in [".txt"]]
+    
     if not files:
-        print(f"Aucun fichier trouvé dans {SAMPLE_INVOICES_DIR}")
+        print(f"Aucun fichier valide trouvé dans {SAMPLE_INVOICES_DIR}")
+        print("(Les fichiers .DS_Store et .txt sont ignorés)")
         return
 
     print(f"Traitement de {len(files)} fichier(s) du dossier sample_invoices/\n")
 
     for file_path in files:
-        if file_path.is_file():
             print(f"Traitement : {file_path.name}")
 
             try:

@@ -5,6 +5,7 @@ Utilise les Structured Outputs (response_format) pour obtenir du JSON conforme a
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -45,6 +46,61 @@ def _load_system_prompt(prompt_version: str = "v1") -> str:
 SYSTEM_PROMPT = _load_system_prompt("v2")
 
 
+def _clean_json_response(raw: str) -> str:
+    """
+    Nettoie la réponse LLM pour extraire du JSON valide.
+    Enlève les blocs markdown (```json ... ```), texte avant/après, etc.
+    
+    Args:
+        raw: Réponse brute du LLM
+    
+    Returns:
+        String JSON valide
+        
+    Raises:
+        ValueError: Si aucun JSON valide trouvé
+    """
+    raw = raw.strip()
+    
+    # Essayer de parser directement si c'est du JSON valide
+    try:
+        json.loads(raw)
+        return raw
+    except json.JSONDecodeError:
+        pass
+    
+    # Essayer d'enlever les blocs markdown (```json ... ``` ou juste ``` ... ```)
+    patterns = [
+        r'```json\s*(.*?)\s*```',  # ```json ... ```
+        r'```\s*(.*?)\s*```',       # ```  ... ```
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, raw, re.DOTALL)
+        if match:
+            json_str = match.group(1).strip()
+            try:
+                json.loads(json_str)
+                return json_str
+            except json.JSONDecodeError:
+                continue
+    
+    # Dernier recours : chercher un objet JSON complet { ... }
+    brace_start = raw.find('{')
+    if brace_start != -1:
+        # Trouver la dernière accolade
+        brace_end = raw.rfind('}')
+        if brace_end > brace_start:
+            potential_json = raw[brace_start:brace_end + 1]
+            try:
+                json.loads(potential_json)
+                return potential_json
+            except json.JSONDecodeError:
+                pass
+    
+    raise ValueError(f"Impossible d'extraire du JSON valide de la réponse: {raw[:100]}")
+
+
 def extract_invoice_from_image(
     image_base64: str,
     *,
@@ -79,13 +135,25 @@ def extract_invoice_from_image(
         response_format={"type": "json_schema", "json_schema": _invoice_json_schema()},
     )
 
+    # Log token usage
+    if response.usage:
+        logger.info(
+            "Token usage - prompt: %s | completion: %s | total: %s",
+            response.usage.prompt_tokens,
+            response.usage.completion_tokens,
+            response.usage.total_tokens,
+        )
+
     choice = response.choices[0]
     if not choice.message.content:
         raise ValueError("Réponse LLM vide")
 
     raw = choice.message.content.strip()
-
-    data = json.loads(raw)
+    
+    # Nettoyer la réponse JSON (enlever markdown, texte avant/après, etc.)
+    cleaned = _clean_json_response(raw)
+    
+    data = json.loads(cleaned)
     return InvoiceData.model_validate(data)
 
 

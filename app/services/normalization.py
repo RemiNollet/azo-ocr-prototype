@@ -12,20 +12,39 @@ def clean_amount_string(value: str) -> str:
     """
     Nettoie une chaîne représentant un montant avant conversion en float.
     Enlève espaces, caractères de milliers (espaces, virgules, points selon locale), garde le décimal.
+    Convertit le format français (point=milliers, virgule=décimal) en format US (point=décimal).
     """
     if not value or not isinstance(value, str):
-        return value
+        return "0"
     s = value.strip()
+    if not s:
+        return "0"
     # Supprimer espaces et symboles monétaires courants
     s = re.sub(r"[\s\xa0]", "", s)
-    s = s.replace("\u202f", "").replace(",", ".")
-    # Garder uniquement chiffres, point décimal et éventuel signe
-    s = re.sub(r"[^\d.\-+]", "", s)
-    # Éviter plusieurs points (garder le dernier comme décimal)
-    parts = s.split(".")
-    if len(parts) > 2:
-        s = "".join(parts[:-1]) + "." + parts[-1]
-    return s.strip() or "0"
+    s = s.replace("\u202f", "")
+    # Garder uniquement chiffres, virgule, point et éventuel signe
+    s = re.sub(r"[^\d,.\-+]", "", s)
+    
+    # Traiter le format français (14.489.448,50 → 14489448.50)
+    # Si la chaîne contient une virgule ET des points, c'est français
+    if "," in s and "." in s:
+        # Enlever tous les points (séparateurs de milliers)
+        s = s.replace(".", "")
+        # Remplacer la virgule par un point (décimal)
+        s = s.replace(",", ".")
+    # Si seulement des points et pas de virgule, vérifier si c'est français ou non
+    elif "." in s and "," not in s:
+        # Si plus d'un point : format français (14.489.448)
+        parts = s.split(".")
+        if len(parts) > 2:
+            # Enlever TOUS les points (format français milliers)
+            s = "".join(parts)
+    
+    # Remplacer virgule décimale par point (au cas où)
+    s = s.replace(",", ".")
+    
+    result = s.strip() or "0"
+    return result
 
 
 def string_to_float(value: str) -> float:

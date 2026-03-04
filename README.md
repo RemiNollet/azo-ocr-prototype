@@ -91,6 +91,29 @@ Extrait les données d'une facture (image ou PDF, première page).
 curl -X POST -F "file=@facture.pdf" http://127.0.0.1:8000/api/v1/extract
 ```
 
+### `GET /api/v1/kpi`
+
+Récupère les statistiques KPI agrégées : taux succès, latence moyenne, temps de traitement, etc.
+
+**Réponse** :
+```json
+{
+  "total_extractions": 25,
+  "success_rate": 96.0,
+  "failed_count": 1,
+  "human_review_count": 3,
+  "review_rate": 12.0,
+  "avg_duration_ms": 4250.50,
+  "min_duration_ms": 3100.0,
+  "max_duration_ms": 6200.0
+}
+```
+
+**Exemple curl** :
+```bash
+curl http://127.0.0.1:8000/api/v1/kpi
+```
+
 ## Architecture
 
 Voir [ARCHITECTURE.md](ARCHITECTURE.md) pour les détails sur l'architecture du système.
@@ -167,23 +190,62 @@ Les résultats seront sauvegardés dans **`resultats/extractions.csv`** avec les
 - `fournisseur`, `numero_facture`, `date`, montants, devise, etc.
 - `error_message` : message d'erreur si applicable
 
-### Tests unitaires
+### Tests unitaires et d'intégration
 
-Dans un micro service en production, des tests unitaires devraient etre présents. Pour le prototype il a été jugé que les tests unitaires n'étaient pas nécessaires mais pour respecter les bonnes pratiques, les fichiers suivants apparaissent tout de même dans le repo :
+Les tests suivent les bonnes pratiques avec **pytest**, des **fixtures** et des **mocks** :
 
 ```bash
-# Installer pytest (déjà dans requirements.txt)
-pip install pytest
+# Installer les dépendances de test (déjà dans requirements.txt)
+pip install -r requirements.txt
 
-# Lancer les tests
+# Lancer tous les tests
 pytest test/ -v
 
-# Lancer les tests d'un module spécifique
-pytest test/test_validation.py -v
+# Lancer uniquement les tests unitaires
+pytest test/ -v -m unit
+
+# Lancer uniquement les tests d'intégration
+pytest test/ -v -m integration
+
+# Lancer les tests avec couverture de code
+pytest test/ --cov=app --cov-report=html
+
+# Lancer via le script fourni
+bash run_tests.sh
 ```
 
-Les fichiers de test `test/test_*.py` contiennent les commentaires
-sur les tests a implementer:
+**Structure des tests** :
+- **`test/conftest.py`** : Fixtures partagées (factures d'exemple, mocks OpenAI, etc.)
+- **`test/test_normalization.py`** : Tests des fonctions de nettoyage/normalisation
+- **`test/test_validation.py`** : Tests de validation Pydantic et logique métier OHADA
+- **`test/test_llm_client.py`** : Tests du client OpenAI (mocking des appels API)
+- **`test/test_ocr_pipeline.py`** : Tests du pipeline de cascading/fallback
+- **`test/test_routes.py`** : Tests d'intégration des endpoints FastAPI
+
+### Suivi des KPI (Business Intelligence)
+
+L'API expose un endpoint `/api/v1/kpi` pour consulter les métriques business :
+
+```bash
+# Récupérer les statistiques
+curl http://127.0.0.1:8000/api/v1/kpi | jq
+
+# Résultat exemple :
+{
+  "total_extractions": 25,
+  "success_rate": 96.0,
+  "failed_count": 1,
+  "human_review_count": 3,
+  "review_rate": 12.0,
+  "avg_duration_ms": 4250.50,      # Latence moyenne
+  "min_duration_ms": 3100.0,       # Latence minimale
+  "max_duration_ms": 6200.0        # Latence maximale
+}
+```
+
+**Fichier de données KPI** : `resultats/kpi.jsonl`
+- Format JSONL (une métrique par ligne)
+- Contient : timestamp, filename, duration, nb appels LLM, modèle utilisé, succès/erreur, etc.
 - `test_normalization.py` : Nettoyage des données
 - `test_validation.py` : Validation métier OHADA
 - `test_llm_client.py` : Intégration OpenAI

@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from pdf2image import convert_from_bytes
 from pydantic import BaseModel, Field
 
+from app.monitoring.kpi import kpi_tracker
 from app.services.ocr_pipeline import run_extraction_pipeline
 
 logger = logging.getLogger(__name__)
@@ -51,6 +52,19 @@ class ExtractResponse(BaseModel):
     error_message: str | None = Field(None, description="Message d'erreur lorsque needs_human_review=True")
 
 
+@router.get(
+    "/kpi",
+    summary="Récupérer les statistiques KPI",
+    description="Retourne les statistiques d'extraction (taux succès, durée moyenne, latence, etc.).",
+)
+async def get_kpi_stats():
+    """Retourne les statistiques KPI agrégées."""
+    from app.monitoring.kpi import get_kpi_stats
+
+    stats = get_kpi_stats()
+    return stats
+
+
 @router.post(
     "/extract",
     response_model=ExtractResponse,
@@ -86,7 +100,18 @@ async def extract(file: UploadFile = File(...)) -> ExtractResponse:
         logger.exception("Conversion fichier -> image échouée")
         raise HTTPException(status_code=400, detail="Conversion du fichier en image impossible.") from e
 
+    # Lancer le pipeline avec KPI tracking
+    kpi_tracker.start_extraction()
     result = run_extraction_pipeline(image_base64)
+    
+    # Enregistrer KPI
+    kpi = kpi_tracker.end_extraction(
+        filename=file.filename or "unknown",
+        success=result.data is not None,
+        needs_human_review=result.needs_human_review,
+        error_type=type(result.error_message).__name__ if result.error_message else None,
+        error_message=result.error_message,
+    )
 
     if result.data is not None:
         response_data = result.data.model_dump()

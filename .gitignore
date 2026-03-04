@@ -49,3 +49,6 @@ htmlcov/
 Thumbs.db
 
 sample_invoices/
+IMPLEMENTATION_SUMMARY.md
+KPI.md
+resultats/

@@ -13,6 +13,7 @@ from app.core.config import Settings, get_settings
 from app.models.schemas import InvoiceData
 from app.models.constants import MathValidationError
 from app.services.llm_client import extract_invoice_from_image
+from app.monitoring.kpi import kpi_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ def run_extraction_pipeline(
 
     for index, model_name in enumerate(models_to_try, start=1):
         try:
+            kpi_tracker.record_llm_call(model_name)
             data = extract_invoice_from_image(
                 image_base64,
                 model=model_name,
